@@ -1,3 +1,4 @@
+import os
 from urllib.parse import urlparse, urlunparse
 
 from openhands.utils.environment import is_running_in_docker
@@ -23,6 +24,11 @@ def replace_localhost_hostname_for_docker(
         otherwise returns the original URL unchanged
     """
     if not is_running_in_docker():
+        return url
+    # For local/process/cli runtimes running inside a container (e.g. Railway),
+    # localhost should stay localhost because the agent server is in the same container.
+    runtime = os.getenv('RUNTIME', '').lower()
+    if runtime in ('local', 'process', 'cli'):
         return url
     parsed = urlparse(url)
     if parsed.hostname == 'localhost':

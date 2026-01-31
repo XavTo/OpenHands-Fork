@@ -278,12 +278,12 @@ class AppConversationServiceBase(AppConversationService, ABC):
         request = task.request
 
         # Create the projects directory if it does not exist yet
-        parent = Path(workspace.working_dir).parent
-        result = await workspace.execute_command(
-            f'mkdir {workspace.working_dir}', parent
-        )
-        if result.exit_code:
-            _logger.warning(f'mkdir failed: {result.stderr}')
+        working_dir = workspace.working_dir
+        if working_dir and working_dir != '.':
+            # Use a known-good cwd to avoid failing when parent directories don't exist yet.
+            result = await workspace.execute_command(f'mkdir -p {working_dir}', '.')
+            if result.exit_code and 'File exists' not in result.stderr:
+                _logger.warning(f'mkdir failed: {result.stderr}')
 
         # Configure git user settings from user preferences
         await self._configure_git_user_settings(workspace)

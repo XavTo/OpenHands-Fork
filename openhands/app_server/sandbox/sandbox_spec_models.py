@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from openhands.agent_server.utils import utc_now
 
@@ -15,6 +15,16 @@ class SandboxSpecInfo(BaseModel):
         default_factory=dict, description='Initial Environment Variables'
     )
     working_dir: str = '/home/openhands/workspace'
+
+    @field_validator('working_dir', mode='before')
+    @classmethod
+    def normalize_working_dir(cls, value: str | None) -> str:
+        """Ensure working_dir is never empty for subprocess cwd usage."""
+        if value is None:
+            return '.'
+        if isinstance(value, str) and value.strip() == '':
+            return '.'
+        return value
 
 
 class SandboxSpecInfoPage(BaseModel):

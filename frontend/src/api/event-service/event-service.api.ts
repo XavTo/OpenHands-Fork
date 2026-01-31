@@ -5,6 +5,7 @@ import type {
   ConfirmationResponseRequest,
   ConfirmationResponseResponse,
 } from "./event-service.types";
+import type { V1SendMessageRequest } from "../conversation-service/v1-conversation-service.types";
 import { openHands } from "../open-hands-axios";
 import { OpenHandsEvent } from "#/types/v1/core";
 
@@ -37,6 +38,33 @@ class EventService {
     );
 
     return data;
+  }
+
+  /**
+   * Send a message to a V1 conversation via runtime HTTP endpoint
+   * @param conversationId The conversation ID
+   * @param conversationUrl The conversation URL (e.g., "http://localhost:54928/api/conversations/...")
+   * @param message The message to send
+   * @param sessionApiKey Session API key for authentication (required for V1)
+   * @returns void on success, throws on error
+   */
+  static async sendMessageV1(
+    conversationId: string,
+    conversationUrl: string,
+    message: V1SendMessageRequest,
+    sessionApiKey?: string | null,
+  ): Promise<void> {
+    const runtimeUrl = buildHttpBaseUrl(conversationUrl);
+    const headers = buildSessionHeaders(sessionApiKey);
+
+    await axios.post(
+      `${runtimeUrl}/api/conversations/${conversationId}/events`,
+      {
+        ...message,
+        run: true,
+      },
+      { headers },
+    );
   }
 
   /**

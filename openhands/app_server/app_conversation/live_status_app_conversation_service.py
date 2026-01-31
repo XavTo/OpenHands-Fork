@@ -117,6 +117,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
     access_token_hard_timeout: timedelta | None
     app_mode: str | None = None
     tavily_api_key: str | None = None
+    enable_browser: bool = True
 
     async def search_app_conversations(
         self,
@@ -445,16 +446,37 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         conversation_url = None
         session_api_key = None
         if sandbox and sandbox.exposed_urls:
-            conversation_url = next(
-                (
-                    exposed_url.url
-                    for exposed_url in sandbox.exposed_urls
-                    if exposed_url.name == AGENT_SERVER
-                ),
-                None,
-            )
-            if conversation_url:
-                conversation_url += f'/api/conversations/{app_conversation_info.id.hex}'
+            conversation_id_hex = app_conversation_info.id.hex
+
+            # When web_url is configured (K8s/production deployment), use the
+            # proxy URL which routes through the main app server. This is necessary
+            # because the agent-server containers run on random ports that are not
+            # exposed through the ingress.
+            #
+            # The proxy URL format is:
+            #   {web_url}/runtime/{conversation_id}/api/conversations/{conversation_id}
+            #
+            # The frontend's extractPathPrefix() will extract "/runtime/{conversation_id}"
+            # as the path prefix, allowing all API calls and WebSocket connections to
+            # route through the proxy.
+            if self.web_url:
+                conversation_url = (
+                    f'{self.web_url.rstrip("/")}/runtime/{conversation_id_hex}'
+                    f'/api/conversations/{conversation_id_hex}'
+                )
+            else:
+                # Direct connection (local development without web_url configured)
+                conversation_url = next(
+                    (
+                        exposed_url.url
+                        for exposed_url in sandbox.exposed_urls
+                        if exposed_url.name == AGENT_SERVER
+                    ),
+                    None,
+                )
+                if conversation_url:
+                    conversation_url += f'/api/conversations/{conversation_id_hex}'
+
             session_api_key = sandbox.session_api_key
 
         return AppConversation(
@@ -886,7 +908,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         else:
             agent = Agent(
                 llm=llm,
-                tools=get_default_tools(enable_browser=True),
+                tools=get_default_tools(enable_browser=self.enable_browser),
                 system_prompt_kwargs={'cli_mode': False},
                 condenser=condenser,
                 mcp_config=mcp_config,
@@ -1451,6 +1473,10 @@ class LiveStatusAppConversationServiceInjector(AppConversationServiceInjector):
         default=None,
         description='The Tavily Search API key to add to MCP integration',
     )
+    enable_browser: bool = Field(
+        default=True,
+        description='Whether to enable browser tools in agent runtimes',
+    )
 
     async def inject(
         self, state: InjectorState, request: Request | None = None
@@ -1533,4 +1559,5 @@ class LiveStatusAppConversationServiceInjector(AppConversationServiceInjector):
                 access_token_hard_timeout=access_token_hard_timeout,
                 app_mode=app_mode,
                 tavily_api_key=tavily_api_key,
+                enable_browser=config.enable_browser,
             )

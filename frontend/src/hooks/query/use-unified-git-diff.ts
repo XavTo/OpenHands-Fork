@@ -27,8 +27,8 @@ export const useUnifiedGitDiff = (config: UseUnifiedGitDiffConfig) => {
   const sessionApiKey = conversation?.session_api_key;
   const selectedRepository = conversation?.selected_repository;
 
-  // For V1, we need to convert the relative file path to an absolute path
-  // The diff endpoint expects: /workspace/project/RepoName/relative/path
+  // For V1, we need to convert the relative file path to a workspace path
+  // The diff endpoint expects: workspace/project/RepoName/relative/path
   const absoluteFilePath = React.useMemo(() => {
     if (!isV1Conversation) return config.filePath;
 

@@ -28,7 +28,9 @@ def get_default_sandbox_specs():
                 'OH_ENABLE_VS_CODE': '0',
                 **get_agent_server_env(),
             },
-            working_dir='',
+            # Use a consistent workspace path under the sandbox directory.
+            # Empty string breaks bash commands with cwd="".
+            working_dir='workspace/project',
         )
     ]
 

@@ -747,14 +747,39 @@ export function ConversationWebSocketProvider({
       const currentMode = useConversationStore.getState().conversationMode;
       const currentSocket =
         currentMode === "plan" ? planningAgentSocket : mainSocket;
-
-      if (!currentSocket || currentSocket.readyState !== WebSocket.OPEN) {
-        const error = "WebSocket is not connected";
-        setErrorMessage(error);
-        throw new Error(error);
-      }
-
       try {
+        // Prefer HTTP for sending messages; it's more reliable behind proxies.
+        const planningAgentConversation = subConversations?.[0];
+        const targetConversationId =
+          currentMode === "plan"
+            ? planningAgentConversation?.id
+            : conversationId;
+        const targetConversationUrl =
+          currentMode === "plan"
+            ? planningAgentConversation?.conversation_url
+            : conversationUrl;
+        const targetSessionApiKey =
+          currentMode === "plan"
+            ? planningAgentConversation?.session_api_key
+            : sessionApiKey;
+
+        if (targetConversationId && targetConversationUrl) {
+          await EventService.sendMessageV1(
+            targetConversationId,
+            targetConversationUrl,
+            message,
+            targetSessionApiKey,
+          );
+          return;
+        }
+
+        // Fallback to WebSocket if runtime URL isn't available
+        if (!currentSocket || currentSocket.readyState !== WebSocket.OPEN) {
+          const error = "WebSocket is not connected";
+          setErrorMessage(error);
+          throw new Error(error);
+        }
+
         // Send message through WebSocket as JSON
         currentSocket.send(JSON.stringify(message));
       } catch (error) {
@@ -764,7 +789,15 @@ export function ConversationWebSocketProvider({
         throw error;
       }
     },
-    [mainSocket, planningAgentSocket, setErrorMessage],
+    [
+      mainSocket,
+      planningAgentSocket,
+      conversationId,
+      conversationUrl,
+      sessionApiKey,
+      subConversations,
+      setErrorMessage,
+    ],
   );
 
   // Track main socket state changes

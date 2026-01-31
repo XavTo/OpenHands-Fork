@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from typing import AsyncContextManager
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import Depends, Request
@@ -79,6 +80,9 @@ def get_default_web_url() -> str | None:
     web_host = os.getenv('WEB_HOST')
     if not web_host:
         return None
+    parsed = urlparse(web_host)
+    if parsed.scheme:
+        return web_host
     return f'https://{web_host}'
 
 
@@ -126,6 +130,10 @@ class AppServerConfig(OpenHandsModel):
     app_mode: AppMode = AppMode.OPENHANDS
     web_client: WebClientConfigInjector = Field(
         default_factory=DefaultWebClientConfigInjector
+    )
+    enable_browser: bool = Field(
+        default=True,
+        description='Whether to enable browser tools in agent runtimes',
     )
 
 

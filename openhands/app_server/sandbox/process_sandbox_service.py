@@ -134,13 +134,18 @@ class ProcessSandboxService(SandboxService):
         )
 
         try:
-            # Start the process
+            inherit_io = os.getenv('PROCESS_SANDBOX_INHERIT_IO', '1').lower() in {
+                '1',
+                'true',
+                'yes',
+            }
+            # Start the process; inherit IO by default to avoid pipe blocking
             process = subprocess.Popen(
                 cmd,
                 env=env,
                 cwd=working_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=None if inherit_io else subprocess.PIPE,
+                stderr=None if inherit_io else subprocess.PIPE,
             )
 
             # Wait a moment for the process to start
@@ -158,6 +163,7 @@ class ProcessSandboxService(SandboxService):
 
     async def _wait_for_server_ready(self, port: int, timeout: int = 30) -> bool:
         """Wait for the agent server to be ready."""
+        timeout = int(os.getenv('PROCESS_SANDBOX_STARTUP_TIMEOUT', timeout))
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
@@ -180,12 +186,11 @@ class ProcessSandboxService(SandboxService):
             process = psutil.Process(process_info.pid)
             if process.is_running():
                 status = process.status()
-                if status == psutil.STATUS_RUNNING:
-                    return SandboxStatus.RUNNING
-                elif status == psutil.STATUS_STOPPED:
+                if status == psutil.STATUS_STOPPED:
                     return SandboxStatus.PAUSED
-                else:
-                    return SandboxStatus.STARTING
+                # For process sandboxes, any running process should be treated
+                # as running; readiness is validated separately via /alive.
+                return SandboxStatus.RUNNING
             else:
                 return SandboxStatus.MISSING
         except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -338,7 +343,16 @@ class ProcessSandboxService(SandboxService):
         if not await self._wait_for_server_ready(port):
             # Clean up if server didn't start properly
             await self.delete_sandbox(sandbox_id)
-            raise SandboxError('Agent Server Failed to start properly')
+            error_details = ''
+            if process.poll() is not None:
+                try:
+                    stdout, stderr = process.communicate(timeout=1)
+                    output = (stderr or stdout or b'').decode(errors='replace').strip()
+                    if output:
+                        error_details = f' Output: {output}'
+                except Exception:
+                    pass
+            raise SandboxError(f'Agent Server Failed to start properly.{error_details}')
 
         return await self._process_to_sandbox_info(sandbox_id, process_info)
 
