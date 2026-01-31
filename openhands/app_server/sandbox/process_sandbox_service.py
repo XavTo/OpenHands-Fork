@@ -32,6 +32,8 @@ from openhands.app_server.sandbox.sandbox_models import (
     SandboxStatus,
 )
 from openhands.app_server.sandbox.sandbox_service import (
+    ALLOW_CORS_ORIGINS_VARIABLE,
+    WEBHOOK_CALLBACK_VARIABLE,
     SandboxService,
     SandboxServiceInjector,
 )
@@ -51,6 +53,19 @@ def _get_default_base_working_dir() -> str:
     if persistence_dir:
         return str(Path(persistence_dir) / 'sandboxes')
     return str(Path.home() / '.openhands' / 'sandboxes')
+
+
+def _get_local_webhook_url() -> str:
+    """Build a local webhook URL for the agent-server to call back into."""
+    port = os.getenv('PORT', '3000')
+    return f'http://127.0.0.1:{port}/api/v1/webhooks'
+
+
+def _normalize_web_url(raw_url: str) -> str:
+    """Ensure web URL has a scheme, defaulting to https."""
+    if '://' in raw_url:
+        return raw_url
+    return f'https://{raw_url}'
 
 
 class ProcessInfo(BaseModel):
@@ -128,6 +143,12 @@ class ProcessSandboxService(SandboxService):
         env = os.environ.copy()
         env.update(sandbox_spec.initial_env)
         env['SESSION_API_KEY'] = session_api_key
+        if not env.get(WEBHOOK_CALLBACK_VARIABLE):
+            env[WEBHOOK_CALLBACK_VARIABLE] = _get_local_webhook_url()
+
+        raw_web_url = os.getenv('OH_WEB_URL') or os.getenv('WEB_HOST')
+        if raw_web_url and not env.get(ALLOW_CORS_ORIGINS_VARIABLE):
+            env[ALLOW_CORS_ORIGINS_VARIABLE] = _normalize_web_url(raw_web_url)
 
         # Prepare command arguments
         cmd = [

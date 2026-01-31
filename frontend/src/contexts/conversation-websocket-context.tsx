@@ -47,6 +47,7 @@ import { useReadConversationFile } from "#/hooks/mutation/use-read-conversation-
 import useMetricsStore from "#/stores/metrics-store";
 import { I18nKey } from "#/i18n/declaration";
 import { useConversationHistory } from "#/hooks/query/use-conversation-history";
+import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 
 // eslint-disable-next-line @typescript-eslint/naming-convention
 export type V1_WebSocketConnectionState =
@@ -98,6 +99,7 @@ export function ConversationWebSocketProvider({
   const { setExecutionStatus } = useV1ConversationStateStore();
   const { appendInput, appendOutput } = useCommandStore();
   const { trackCreditLimitReached } = useTracking();
+  const { data: conversation } = useActiveConversation();
 
   // History loading state - separate per connection
   const [isLoadingHistoryMain, setIsLoadingHistoryMain] = useState(true);
@@ -743,9 +745,17 @@ export function ConversationWebSocketProvider({
 
   useEffect(() => {
     if (!wsUrl) {
-      setMainConnectionState("CLOSED");
+      if (
+        conversation?.status === "STOPPED" ||
+        conversation?.status === "ARCHIVED" ||
+        conversation?.status === "ERROR"
+      ) {
+        setMainConnectionState("CLOSED");
+      } else {
+        setMainConnectionState("CONNECTING");
+      }
     }
-  }, [wsUrl]);
+  }, [wsUrl, conversation?.status]);
 
   useEffect(() => {
     if (!planningAgentWsUrl) {
