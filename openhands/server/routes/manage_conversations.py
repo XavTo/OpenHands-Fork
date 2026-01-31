@@ -1492,7 +1492,7 @@ def _to_conversation_info(app_conversation: AppConversation) -> ConversationInfo
         SandboxStatus.STARTING: ConversationStatus.STARTING,
         SandboxStatus.PAUSED: ConversationStatus.STOPPED,
         SandboxStatus.ERROR: ConversationStatus.ERROR,
-        SandboxStatus.MISSING: ConversationStatus.ARCHIVED,
+        SandboxStatus.MISSING: ConversationStatus.STOPPED,
     }
 
     conversation_status = conversation_status_mapping.get(

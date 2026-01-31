@@ -13,6 +13,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import AsyncGenerator
 
 import base62
@@ -42,6 +43,14 @@ from openhands.app_server.utils.docker_utils import (
 )
 
 _logger = logging.getLogger(__name__)
+
+
+def _get_default_base_working_dir() -> str:
+    """Default sandbox base directory under the OpenHands persistence dir."""
+    persistence_dir = os.getenv('OH_PERSISTENCE_DIR')
+    if persistence_dir:
+        return str(Path(persistence_dir) / 'sandboxes')
+    return str(Path.home() / '.openhands' / 'sandboxes')
 
 
 class ProcessInfo(BaseModel):
@@ -360,7 +369,9 @@ class ProcessSandboxService(SandboxService):
         """Resume a paused sandbox."""
         process_info = _processes.get(sandbox_id)
         if process_info is None:
-            return False
+            # Sandbox was lost (e.g., process restart). Recreate it using the same id.
+            await self.start_sandbox(sandbox_id=sandbox_id)
+            return True
 
         try:
             process = psutil.Process(process_info.pid)
@@ -368,7 +379,13 @@ class ProcessSandboxService(SandboxService):
                 process.resume()
             return True
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            return False
+            # Process is gone or inaccessible: recreate sandbox for resume.
+            _processes.pop(sandbox_id, None)
+            await self.start_sandbox(
+                sandbox_spec_id=process_info.sandbox_spec_id,
+                sandbox_id=sandbox_id,
+            )
+            return True
 
     async def pause_sandbox(self, sandbox_id: str) -> bool:
         """Pause a running sandbox."""
@@ -426,7 +443,7 @@ class ProcessSandboxServiceInjector(SandboxServiceInjector):
     """Dependency injector for process sandbox services."""
 
     base_working_dir: str = Field(
-        default='/tmp/openhands-sandboxes',
+        default_factory=_get_default_base_working_dir,
         description='Base directory for sandbox working directories',
     )
     base_port: int = Field(
