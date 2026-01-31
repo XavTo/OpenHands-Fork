@@ -49,10 +49,25 @@ export function useAgentState() {
 
   const curAgentState = useMemo(() => {
     if (isV1Conversation) {
-      return mapV1StatusToV0State(v1Status);
+      if (v1Status) {
+        return mapV1StatusToV0State(v1Status);
+      }
+
+      if (
+        conversation?.status === "STOPPED" ||
+        conversation?.status === "ARCHIVED"
+      ) {
+        return AgentState.STOPPED;
+      }
+
+      if (conversation?.status === "ERROR") {
+        return AgentState.ERROR;
+      }
+
+      return AgentState.LOADING;
     }
     return v0State;
-  }, [isV1Conversation, v1Status, v0State]);
+  }, [conversation?.status, isV1Conversation, v1Status, v0State]);
 
   return { curAgentState };
 }

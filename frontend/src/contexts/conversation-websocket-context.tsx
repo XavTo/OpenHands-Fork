@@ -741,6 +741,18 @@ export function ConversationWebSocketProvider({
     planningWebsocketOptions,
   );
 
+  useEffect(() => {
+    if (!wsUrl) {
+      setMainConnectionState("CLOSED");
+    }
+  }, [wsUrl]);
+
+  useEffect(() => {
+    if (!planningAgentWsUrl) {
+      setPlanningConnectionState("CLOSED");
+    }
+  }, [planningAgentWsUrl]);
+
   // V1 send message function via WebSocket
   const sendMessage = useCallback(
     async (message: V1SendMessageRequest) => {
