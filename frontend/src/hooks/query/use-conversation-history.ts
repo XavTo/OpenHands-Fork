@@ -6,7 +6,7 @@ export const useConversationHistory = (conversationId?: string) => {
   const { data: conversation } = useUserConversation(conversationId ?? null);
 
   return useQuery({
-    queryKey: ["conversation-history", conversationId, conversation],
+    queryKey: ["conversation-history", conversationId],
     enabled: !!conversationId && !!conversation,
     queryFn: async () => {
       if (!conversationId || !conversation) return [];
@@ -17,6 +17,7 @@ export const useConversationHistory = (conversationId?: string) => {
 
       return EventService.searchEventsV0(conversationId);
     },
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 };
