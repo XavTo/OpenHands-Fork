@@ -27,6 +27,7 @@ from openhands.app_server import v1_router
 from openhands.app_server.config import get_app_lifespan_service
 from openhands.app_server.websocket_proxy import router as websocket_proxy_router
 from openhands.integrations.service_types import AuthenticationError
+from openhands.server.basic_auth_middleware import BasicAuthMiddleware
 from openhands.server.routes.conversation import app as conversation_api_router
 from openhands.server.routes.feedback import app as feedback_api_router
 from openhands.server.routes.files import app as files_api_router
@@ -79,6 +80,8 @@ app = FastAPI(
     lifespan=combine_lifespans(*lifespans),
     routes=[Mount(path='/mcp', app=mcp_app)],
 )
+
+app.add_middleware(BasicAuthMiddleware)
 
 
 @app.exception_handler(AuthenticationError)
