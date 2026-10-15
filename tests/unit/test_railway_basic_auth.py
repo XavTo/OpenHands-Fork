@@ -4,6 +4,7 @@ import socketio
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 
+from openhands.app_server.utils.internal_auth import internal_auth_headers
 from openhands.server.basic_auth_middleware import BasicAuthMiddleware
 
 
@@ -16,6 +17,10 @@ def make_client(monkeypatch):
     @app.get('/health')
     def health():
         return {'status': 'ok'}
+
+    @app.post('/mcp/mcp')
+    def mcp():
+        return {'accepted': True}
 
     @app.post('/api/v1/webhooks/conversations')
     def callback(x_session_api_key: str | None = Header(default=None)):
@@ -64,3 +69,17 @@ def test_callback_uses_its_own_session_auth(monkeypatch):
         assert client.get('/api/v1/webhooks/secrets').status_code == 401
         assert client.get('/private').status_code == 401
         assert client.get('/health').status_code == 200
+
+
+def test_internal_mcp_request_authenticates_without_opening_public_access(monkeypatch):
+    with make_client(monkeypatch) as client:
+        assert client.post('/mcp/mcp').status_code == 401
+        assert (
+            client.post('/mcp/mcp', headers=internal_auth_headers()).status_code == 200
+        )
+
+
+def test_internal_auth_is_optional_without_basic_auth(monkeypatch):
+    monkeypatch.delenv('OPENHANDS_BASIC_AUTH_USER', raising=False)
+    monkeypatch.delenv('OPENHANDS_BASIC_AUTH_PASSWORD', raising=False)
+    assert internal_auth_headers() == {}

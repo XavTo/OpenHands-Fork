@@ -72,6 +72,7 @@ from openhands.app_server.user.user_models import UserInfo
 from openhands.app_server.utils.docker_utils import (
     replace_localhost_hostname_for_docker,
 )
+from openhands.app_server.utils.internal_auth import internal_auth_headers
 from openhands.app_server.utils.llm_metadata import (
     get_llm_metadata,
     should_set_litellm_extra_body,
@@ -626,7 +627,10 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                     },
                     expires_in=self.access_token_hard_timeout,
                 )
-                headers = {'X-Access-Token': access_token}
+                headers = {
+                    **internal_auth_headers(),
+                    'X-Access-Token': access_token,
+                }
 
                 secrets[secret_name] = LookupSecret(
                     url=self.web_url + '/api/v1/webhooks/secrets',
@@ -703,14 +707,15 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         # Add default OpenHands MCP server
         mcp_url = f'{self.web_url}/mcp/mcp'
+        headers = internal_auth_headers()
         mcp_servers['default'] = {'url': mcp_url}
 
         # Add API key if available
         mcp_api_key = await self.user_context.get_mcp_api_key()
         if mcp_api_key:
-            mcp_servers['default']['headers'] = {
-                'X-Session-API-Key': mcp_api_key,
-            }
+            headers['X-Session-API-Key'] = mcp_api_key
+        if headers:
+            mcp_servers['default']['headers'] = headers
 
         # Add Tavily search if API key is available
         tavily_api_key = await self._get_tavily_api_key(user)
@@ -867,7 +872,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         # Wrap in the mcpServers structure required by the SDK
         mcp_config = {'mcpServers': mcp_servers} if mcp_servers else {}
-        _logger.info(f'Final MCP configuration: {mcp_config}')
+        _logger.info('Configured MCP servers: %s', list(mcp_servers))
 
         return llm, mcp_config
 
