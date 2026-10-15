@@ -7,6 +7,7 @@ import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, AsyncGenerator, Sequence
 from uuid import UUID, uuid4
 
@@ -58,6 +59,7 @@ from openhands.app_server.event_callback.set_title_callback_processor import (
     SetTitleCallbackProcessor,
 )
 from openhands.app_server.sandbox.docker_sandbox_service import DockerSandboxService
+from openhands.app_server.sandbox.process_sandbox_service import ProcessSandboxService
 from openhands.app_server.sandbox.sandbox_models import (
     AGENT_SERVER,
     SandboxInfo,
@@ -236,11 +238,21 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             )
             assert sandbox_spec is not None
 
+            working_dir = sandbox_spec.working_dir
+            if isinstance(self.sandbox_service, ProcessSandboxService):
+                working_dir = str(
+                    (
+                        Path(self.sandbox_service.base_working_dir)
+                        / sandbox.id
+                        / working_dir
+                    ).resolve()
+                )
+
             # Run setup scripts
             remote_workspace = AsyncRemoteWorkspace(
                 host=agent_server_url,
                 api_key=sandbox.session_api_key,
-                working_dir=sandbox_spec.working_dir,
+                working_dir=working_dir,
             )
             async for updated_task in self.run_setup_scripts(
                 task, sandbox, remote_workspace, agent_server_url
@@ -254,7 +266,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                     request.initial_message,
                     request.system_message_suffix,
                     request.git_provider,
-                    sandbox_spec.working_dir,
+                    working_dir,
                     request.agent_type,
                     request.llm_model,
                     request.conversation_id,
@@ -1168,6 +1180,14 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         """
         user = await self.user_context.get_user_info()
         workspace = LocalWorkspace(working_dir=working_dir)
+        if isinstance(self.sandbox_service, ProcessSandboxService):
+            workspace_context = (
+                f'Your current workspace is {working_dir}. '
+                'Create project files and execute commands in this directory.'
+            )
+            system_message_suffix = '\n'.join(
+                part for part in (workspace_context, system_message_suffix) if part
+            )
 
         # Set up secrets for all git providers
         secrets = await self._setup_secrets_for_git_providers(user)

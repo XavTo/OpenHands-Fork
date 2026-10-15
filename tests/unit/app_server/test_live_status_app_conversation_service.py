@@ -22,6 +22,7 @@ from openhands.app_server.app_conversation.app_conversation_models import (
 from openhands.app_server.app_conversation.live_status_app_conversation_service import (
     LiveStatusAppConversationService,
 )
+from openhands.app_server.sandbox.process_sandbox_service import ProcessSandboxService
 from openhands.app_server.sandbox.sandbox_models import (
     AGENT_SERVER,
     ExposedUrl,
@@ -953,10 +954,15 @@ class TestLiveStatusAppConversationService:
             mock_logger.warning.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_build_start_conversation_request_for_user_integration(self):
+    @pytest.mark.parametrize('process_runtime', [False, True])
+    async def test_build_start_conversation_request_for_user_integration(
+        self, process_runtime
+    ):
         """Test the main _build_start_conversation_request_for_user method integration."""
         # Arrange
         self.mock_user_context.get_user_info.return_value = self.mock_user
+        if process_runtime:
+            self.service.sandbox_service = Mock(spec=ProcessSandboxService)
 
         # Mock all the helper methods
         mock_secrets = {'GITHUB_TOKEN': Mock()}
@@ -1002,7 +1008,13 @@ class TestLiveStatusAppConversationService:
         self.service._create_agent_with_context.assert_called_once_with(
             mock_llm,
             AgentType.DEFAULT,
-            'Test suffix',
+            (
+                'Your current workspace is /test/dir. '
+                'Create project files and execute commands in this directory.\n'
+                'Test suffix'
+                if process_runtime
+                else 'Test suffix'
+            ),
             mock_mcp_config,
             self.mock_user.condenser_max_size,
             secrets=mock_secrets,
@@ -1292,8 +1304,13 @@ class TestLiveStatusAppConversationService:
     @patch(
         'openhands.app_server.app_conversation.live_status_app_conversation_service.ConversationInfo'
     )
+    @pytest.mark.parametrize('process_runtime', [False, True])
     async def test_start_app_conversation_default_title_uses_first_five_characters(
-        self, mock_conversation_info_class, mock_remote_workspace_class
+        self,
+        mock_conversation_info_class,
+        mock_remote_workspace_class,
+        process_runtime,
+        tmp_path,
     ):
         """Test that v1 conversations use first 5 characters of conversation ID for default title."""
         # Arrange
@@ -1307,9 +1324,15 @@ class TestLiveStatusAppConversationService:
 
         # Mock sandbox and sandbox spec
         mock_sandbox_spec = Mock(spec=SandboxSpecInfo)
-        mock_sandbox_spec.working_dir = '/test/workspace'
+        mock_sandbox_spec.working_dir = (
+            'workspace/project' if process_runtime else '/test/workspace'
+        )
         self.mock_sandbox.sandbox_spec_id = str(uuid4())
         self.mock_sandbox.id = str(uuid4())  # Ensure sandbox.id is a string
+        if process_runtime:
+            self.mock_sandbox_service = Mock(spec=ProcessSandboxService)
+            self.mock_sandbox_service.base_working_dir = str(tmp_path)
+            self.service.sandbox_service = self.mock_sandbox_service
         self.mock_sandbox.session_api_key = 'test_session_key'
         exposed_url = ExposedUrl(
             name=AGENT_SERVER, url='http://agent-server:8000', port=60000
@@ -1387,6 +1410,19 @@ class TestLiveStatusAppConversationService:
             f'but got "{saved_info.title}"'
         )
         assert saved_info.id == conversation_id
+        expected_working_dir = (
+            str(tmp_path / self.mock_sandbox.id / 'workspace/project')
+            if process_runtime
+            else '/test/workspace'
+        )
+        assert (
+            mock_remote_workspace_class.call_args.kwargs['working_dir']
+            == expected_working_dir
+        )
+        assert (
+            self.service._build_start_conversation_request_for_user.call_args.args[4]
+            == expected_working_dir
+        )
 
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_with_custom_sse_servers(self):
