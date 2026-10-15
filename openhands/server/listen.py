@@ -11,6 +11,7 @@ import os
 import socketio
 
 from openhands.server.app import app as base_app
+from openhands.server.basic_auth_middleware import BasicAuthMiddleware
 from openhands.server.listen_socket import sio
 from openhands.server.middleware import (
     CacheControlMiddleware,
@@ -32,4 +33,4 @@ base_app.add_middleware(
     rate_limiter=InMemoryRateLimiter(requests=10, seconds=1),
 )
 
-app = socketio.ASGIApp(sio, other_asgi_app=base_app)
+app = BasicAuthMiddleware(socketio.ASGIApp(sio, other_asgi_app=base_app))

@@ -4,8 +4,7 @@ set -eo pipefail
 echo "Starting OpenHands..."
 if [[ $NO_SETUP == "true" ]]; then
   echo "Skipping setup, running as $(whoami)"
-  "$@"
-  exit 0
+  exec "$@"
 fi
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -38,7 +37,7 @@ fi
 if [[ "$SANDBOX_USER_ID" -eq 0 ]]; then
   echo "Running OpenHands as root"
   export RUN_AS_OPENHANDS=false
-  "$@"
+  exec "$@"
 else
   echo "Setting up enduser with id $SANDBOX_USER_ID"
   if id "enduser" &>/dev/null; then
@@ -69,5 +68,5 @@ else
 
   usermod -aG $DOCKER_SOCKET_GID enduser
   echo "Running as enduser"
-  su enduser /bin/bash -c "${*@Q}" # This magically runs any arguments passed to the script as a command
+  exec su enduser /bin/bash -c "exec ${*@Q}"
 fi

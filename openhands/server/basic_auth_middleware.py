@@ -75,6 +75,14 @@ class BasicAuthMiddleware:
             return
 
         path = scope.get('path', '')
+        # Agent callbacks authenticate with X-Session-API-Key in webhook_router.
+        # They cannot also supply the browser owner's Basic Auth credentials.
+        if scope['type'] == 'http' and scope.get('method') == 'POST':
+            if path == '/api/v1/webhooks/conversations' or path.startswith(
+                '/api/v1/webhooks/events/'
+            ):
+                await self.app(scope, receive, send)
+                return
         if _is_path_exempt(path, self._exempt_paths):
             await self.app(scope, receive, send)
             return
@@ -90,8 +98,10 @@ class BasicAuthMiddleware:
         if credentials:
             username, password = credentials
             authorized = hmac.compare_digest(
-                username, self._user
-            ) and hmac.compare_digest(password, self._password)
+                username.encode('utf-8'), self._user.encode('utf-8')
+            ) and hmac.compare_digest(
+                password.encode('utf-8'), self._password.encode('utf-8')
+            )
 
         if authorized:
             await self.app(scope, receive, send)

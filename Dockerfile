@@ -112,4 +112,4 @@ WORKDIR /app
 EXPOSE 3000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["bash","-lc","/app/.venv/bin/python -m uvicorn openhands.server.listen:app --host 0.0.0.0 --port ${PORT:-3000}"]
+CMD ["bash","-lc","exec /app/.venv/bin/python -m uvicorn openhands.server.listen:app --host 0.0.0.0 --port ${PORT:-3000}"]
